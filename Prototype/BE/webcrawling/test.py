@@ -51,3 +51,8 @@ if __name__ == "__main__":
     test = BlogTests()
     test.set_blog_values(post_link)
     test.start_test(False)
+
+
+# data가 30개씩 나오는지 확인
+# data 4000개 모두 나오는지 확인
+# naver blog 아닌지 맞는지 여부 검사
