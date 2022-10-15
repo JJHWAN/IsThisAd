@@ -2,19 +2,20 @@ import re
 from urllib.parse import quote
 import requests
 from bs4 import BeautifulSoup
-
+import pandas as pd
+from constant import *
 
 class Worker:
 
-    def __init__(self, query):
+    def __init__(self, query, index):
         # 변경되지 않을 attrs
         self.query = query
-        self.quote = quote(self.query)
+        self.quote = quote(query)
         # 계속 변경될 attrs
         self.url = ""  # for moreContentView Request URL
         self.res = None
         self.soup = None
-        self.index = None
+        self.index = index
 
     def set_index(self, index):
         self.index = index
@@ -52,13 +53,14 @@ class Worker:
         :param url: blog link with iframe deleted
         :return: [image link], blog text
         """
-        res = requests.get(url)
-        res.raise_for_status()  # 문제시 프로그램 종료
-        soup = BeautifulSoup(self.res.text, "lxml")
 
-        images = self.soup.findAll("img", \
-                                   attrs={
-                                       "class": ["se-image-resource", "se-sticker-image", "se-inline-image-resource"]})
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.93 Safari/537.36"}
+        res = requests.get(url, headers=headers)
+        res.raise_for_status()  # 문제시 프로그램 종료
+        soup = BeautifulSoup(res.text, "lxml")
+
+        images = soup.findAll("img", attrs={"class": ["se-image-resource", "se-sticker-image", "se-inline-image-resource"]})
 
         image_link = []
         if images:
@@ -69,7 +71,7 @@ class Worker:
                     image_link.append(image['src'].replace("?type=w80_blur", ""))
 
         if soup.find("div", attrs={"class": "se-main-container"}):
-            text = self.soup.find("div", attrs={"class": "se-main-container"}).get_text()
+            text = soup.find("div", attrs={"class": "se-main-container"}).get_text()
             text = text.replace("\n", " ")  # 공백 제거
             text = text.replace("\r", " ")
             return image_link, text
@@ -105,7 +107,7 @@ class Worker:
             blog_m = blog_p.search(post_link)
 
             if blog_m:
-                images_src, blog_text = self.text_scraping(self.update_url_without_iframe(post_link))
+                images_src, blog_text = self.text_scraping(self.update_with_posturl(post_link))
                 if blog_text is not None:
                     data.append(images_src)
                     data.append(blog_text)
@@ -113,13 +115,28 @@ class Worker:
 
         return result_list
 
-    def get_data_with_index(self, index):
+    def write_csv(self, data):
+        df = pd.DataFrame(data, columns=['post_link', 'image_src', 'blog_text'])
+        file_name = "data" + self.query
+        df.to_csv('C:\\Users\\USER\\Desktop\\data\\' + file_name + str(self.index) + '.csv', encoding='utf-8', index=False)
+
+    def data_with_index(self, index):
         """
-        return data set from query & index
+        get data set from query & index
+        and write with it
         :param index: search index of query
         :return: data set with query & index
         """
-        self.set_index(index)
-        self.update_url_viewMorecontent(index)
-        self.set_res_soup(self, self.url)
-        return self.get_data()
+        data = []
+        while True:
+            self.set_index(index)
+            self.update_url_viewMorecontent()
+            self.set_res_soup(self.url)
+            result = self.get_data()
+            if len(result) == 1:
+                break
+            data += result
+            index += MAX_THREAD
+
+        self.write_csv(data)
+        print("Written :", index)
